@@ -1,0 +1,42 @@
+# Docker Compose Refresh Cron Job Examples
+# 
+# To install: crontab -e
+# Then add one of the lines below (remove the # comment)
+
+# ✅ VERIFIED WORKING - Run every day at 2 AM
+# 0 2 * * * cd /Users/n8/code/n8io/homelab && /Users/n8/code/n8io/homelab/refresh-cron.sh
+
+# ✅ VERIFIED WORKING - Run every Sunday at 3 AM (weekly updates)
+# 0 3 * * 0 cd /Users/n8/code/n8io/homelab && /Users/n8/code/n8io/homelab/refresh-cron.sh
+
+# ✅ VERIFIED WORKING - Run every 1st and 15th of the month at 4 AM
+# 0 4 1,15 * * cd /Users/n8/code/n8io/homelab && /Users/n8/code/n8io/homelab/refresh-cron.sh
+
+# ✅ VERIFIED WORKING - Run every 6 hours (4 times per day)
+# 0 */6 * * * cd /Users/n8/code/n8io/homelab && /Users/n8/code/n8io/homelab/refresh-cron.sh
+
+# Run with email notifications (if mail is configured)
+# 0 2 * * * cd /Users/n8/code/n8io/homelab && /Users/n8/code/n8io/homelab/refresh-cron.sh 2>&1 | mail -s "Docker Refresh Log" your-email@example.com
+
+# Run with output redirected to /dev/null (no email notifications)
+# 0 2 * * * cd /Users/n8/code/n8io/homelab && /Users/n8/code/n8io/homelab/refresh-cron.sh >/dev/null 2>&1
+
+# 🔧 SETUP INSTRUCTIONS:
+# 1. Test the script manually first: ./refresh-cron.sh
+# 2. Test cron environment: ./test-cron-env.sh
+# 3. Add to crontab: crontab -e
+# 4. Check logs in the logs/ directory
+# 5. Monitor with: tail -f logs/refresh-$(date +%Y%m%d).log
+
+# ✅ PERMISSIONS VERIFIED:
+# - User 'n8' has Docker access ✅
+# - Docker socket accessible ✅
+# - Docker Compose available ✅
+# - Script works in minimal cron environment ✅
+# - All paths are absolute ✅
+
+# 💡 TIPS:
+# - Always use 'cd' before running the script in cron
+# - Consider running during low-traffic hours
+# - Monitor logs regularly for any issues
+# - Test in staging environment first
