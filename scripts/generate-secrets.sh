@@ -40,7 +40,7 @@ check_dependencies() {
     
     # Check for htpasswd (optional but recommended)
     if ! command -v htpasswd &> /dev/null; then
-        echo "⚠️  htpasswd not found. This is optional but recommended for Traefik auth."
+        echo "⚠️  htpasswd not found. This is optional but recommended for n8n basic auth."
         echo "   Install instructions:"
         if [ "$OS" = "macos" ]; then
             echo "   macOS: brew install httpd"
@@ -92,7 +92,7 @@ show_help() {
     echo ""
     echo "Dependencies:"
     echo "  Required: openssl"
-    echo "  Optional: htpasswd (for better Traefik auth security)"
+    echo "  Optional: htpasswd (for better n8n basic auth security)"
 }
 
 # Initialize OS detection
@@ -114,13 +114,12 @@ if [ "$1" = "--show" ]; then
     if [ -f "$ENV_FILE" ]; then
         echo "🔐 Current credentials in .env file:"
         echo "=================================="
+        echo "🌐 Caddy TLS Configuration:"
+        grep "CADDY_TLS=" "$ENV_FILE" | sed 's/=.*/=***HIDDEN***/'
         echo ""
         echo "📧 n8n Admin:"
         grep "N8N_BASIC_AUTH_USER=" "$ENV_FILE" | sed 's/=.*/=***HIDDEN***/'
         grep "N8N_BASIC_AUTH_PASSWORD=" "$ENV_FILE" | sed 's/=.*/=***HIDDEN***/'
-        echo ""
-        echo "🌐 Traefik Dashboard:"
-        grep "TRAEFIK_AUTH_USERS=" "$ENV_FILE" | sed 's/=.*/=***HIDDEN***/'
         echo ""
         echo "🗄️  Database:"
         grep "POSTGRES_PASSWORD=" "$ENV_FILE" | sed 's/=.*/=***HIDDEN***/'
@@ -203,20 +202,44 @@ echo "👤 Generating n8n admin password..."
 N8N_PASSWORD=$(generate_secure_password 20)
 echo "✅ n8n admin password generated"
 
-# Generate Traefik password
-echo "🌐 Generating Traefik password..."
-TRAEFIK_PASSWORD=$(generate_secure_password 20)
-echo "✅ Traefik password generated"
+# Ask for domain and determine TLS configuration
+echo "🌐 Domain Configuration"
+echo "======================"
+echo ""
+echo "Please enter your domain name:"
+echo "  - For localhost development: n8n.localhost (default - just hit Enter)"
+echo "  - For production: your-domain.com"
+echo "  - For IP access: your-server-ip"
+echo ""
+read -p "Domain [n8n.localhost]: " DOMAIN
 
-# Generate Traefik auth hash
-if command -v htpasswd &> /dev/null; then
-    TRAEFIK_AUTH=$(htpasswd -nb admin "$TRAEFIK_PASSWORD")
-    echo "✅ Traefik auth hash generated"
+# Use default domain if empty
+if [ -z "$DOMAIN" ]; then
+    DOMAIN="n8n.localhost"
+    echo "✅ Using default domain: $DOMAIN"
 else
-    echo "⚠️  htpasswd not found. Generating basic auth hash manually..."
-    # Fallback: generate a basic auth hash using openssl (less secure but functional)
-    TRAEFIK_AUTH="admin:$(echo -n "$TRAEFIK_PASSWORD" | openssl dgst -binary -sha1 | openssl base64)"
-    echo "✅ Basic auth hash generated (consider installing htpasswd for better security)"
+    echo "✅ Using custom domain: $DOMAIN"
+fi
+
+# Determine TLS configuration based on domain
+if [[ "$DOMAIN" == *"localhost"* ]] || [[ "$DOMAIN" == *"127.0.0.1"* ]] || [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    CADDY_TLS="internal"
+    echo "✅ Detected localhost/IP domain - using internal TLS"
+else
+    CADDY_TLS=""
+    echo "✅ Detected real domain - using Let's Encrypt TLS"
+fi
+
+echo ""
+
+# Generate n8n basic auth hash
+if command -v htpasswd &> /dev/null; then
+    N8N_AUTH=$(htpasswd -nb admin "$N8N_PASSWORD")
+    echo "✅ n8n basic auth hash generated"
+else
+    echo "⚠️  htpasswd not found. Using plain password for n8n basic auth..."
+    N8N_AUTH="admin:$N8N_PASSWORD"
+    echo "✅ Using plain password (consider installing htpasswd for better security)"
     echo ""
     echo "💡 For better security, install htpasswd:"
     if [ "$OS" = "macos" ]; then
@@ -238,6 +261,10 @@ fi
 # Create .env file
 echo "📝 Creating .env file at $ENV_FILE..."
 cat > "$ENV_FILE" << EOF
+# Caddy TLS Configuration
+# Options: 'internal' for localhost, '' (empty) for real domain with Let's Encrypt
+CADDY_TLS=$CADDY_TLS
+
 # Database Configuration
 POSTGRES_DATABASE=n8n
 POSTGRES_USER=n8n_user
@@ -246,8 +273,7 @@ POSTGRES_PORT=5432
 POSTGRES_SCHEMA=public
 
 # Domain Configuration
-DOMAIN=n8n.localhost
-CERT_EMAIL=icanhazip@acme.com
+DOMAIN=$DOMAIN
 
 # n8n Configuration
 N8N_TIMEZONE=UTC
@@ -256,9 +282,6 @@ N8N_TIMEZONE=UTC
 N8N_BASIC_AUTH_ACTIVE=true
 N8N_BASIC_AUTH_USER=admin
 N8N_BASIC_AUTH_PASSWORD='$N8N_PASSWORD'
-
-# Traefik Authentication
-TRAEFIK_AUTH_USERS='$TRAEFIK_AUTH'
 
 # Additional Security Settings
 N8N_SECURE_COOKIE=true
@@ -276,9 +299,15 @@ echo "📧 n8n Admin Login:"
 echo "   Username: admin"
 echo "   Password: $N8N_PASSWORD"
 echo ""
-echo "🌐 Traefik Dashboard Login:"
-echo "   Username: admin"
-echo "   Password: $TRAEFIK_PASSWORD"
+echo "🌐 Domain & TLS Configuration:"
+echo "   Domain: $DOMAIN"
+if [ "$CADDY_TLS" = "internal" ]; then
+    echo "   TLS Mode: internal (for localhost/IP development)"
+    echo "   Access URL: https://$DOMAIN"
+else
+    echo "   TLS Mode: Let's Encrypt (for production domains)"
+    echo "   Access URL: https://$DOMAIN"
+fi
 echo ""
 echo "🗄️  Database Password: $DB_PASSWORD"
 echo ""
@@ -286,11 +315,19 @@ echo ""
 # Security reminders
 echo "🚨 SECURITY REMINDERS:"
 echo "======================"
-echo "1. Update DOMAIN and CERT_EMAIL in .env file"
-echo "2. Set up firewall (ports 22, 80, 443 only)"
-echo "3. Enable automatic updates"
-echo "4. Set up regular backups"
-echo "5. Monitor logs for suspicious activity"
+if [ "$CADDY_TLS" = "internal" ]; then
+    echo "1. For production, update DOMAIN in .env file to your real domain"
+    echo "2. Set up firewall (ports 22, 80, 443 only)"
+    echo "3. Enable automatic updates"
+    echo "4. Set up regular backups"
+    echo "5. Monitor logs for suspicious activity"
+else
+    echo "1. Ensure your domain DNS points to this server"
+    echo "2. Set up firewall (ports 22, 80, 443 only)"
+    echo "3. Enable automatic updates"
+    echo "4. Set up regular backups"
+    echo "5. Monitor logs for suspicious activity"
+fi
 echo ""
 
 # Set proper permissions
@@ -318,10 +355,11 @@ fi
 echo ""
 echo "🎉 Security setup complete!"
 echo "Next steps:"
-echo "1. Edit .env file with your domain and email"
-echo "2. Run: docker compose up -d"
-echo "3. Access n8n at: https://your-domain.com"
-echo "4. Access Traefik at: https://traefik.your-domain.com"
+echo "1. Run: docker compose up -d"
+echo "2. Access n8n at: https://$DOMAIN"
+if [ "$CADDY_TLS" = "internal" ]; then
+    echo "   (or http://localhost:5678 for direct access)"
+fi
 echo ""
 echo "💡 This script is idempotent - safe to run again if needed"
 echo ""

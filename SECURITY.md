@@ -21,11 +21,10 @@ Edit the generated `.env` file with your actual domain and email:
 
 ```bash
 DOMAIN=your-actual-domain.com
-CERT_EMAIL=your-email@example.com
 ```
 
 ### 3. Install Optional Dependencies (Recommended)
-For better Traefik authentication security:
+For better n8n basic authentication security:
 
 ```bash
 # macOS
@@ -42,12 +41,12 @@ sudo yum install httpd-tools
 
 ### ✅ Authentication & Authorization
 - **n8n Basic Auth**: Enabled by default
-- **Traefik Dashboard Auth**: Protected with basic authentication
+- **Caddy Reverse Proxy**: Automatic HTTPS with Let's Encrypt
 - **Secure Cookies**: Enabled for session management
 
 ### ✅ Encryption
 - **Data Encryption**: N8N_ENCRYPTION_KEY for sensitive workflow data
-- **TLS/SSL**: Automatic Let's Encrypt certificates via Traefik
+- **TLS/SSL**: Automatic Let's Encrypt certificates via Caddy
 - **Database Encryption**: SCRAM-SHA-256 authentication
 
 ### ✅ Container Security
@@ -94,7 +93,7 @@ docker run --rm -v n8n_data:/data -v $(pwd):/backup alpine tar czf /backup/n8n_d
 ```
 
 ### Monitoring
-- Enable Traefik access logs
+- Enable Caddy access logs
 - Monitor n8n logs for suspicious activity
 - Set up alerts for failed authentication attempts
 
@@ -104,7 +103,7 @@ Before going live, ensure:
 
 - [ ] Strong encryption key generated and set
 - [ ] Basic authentication configured for n8n
-- [ ] Traefik dashboard protected with auth
+- [ ] Caddy TLS configuration set appropriately
 - [ ] Strong database password set
 - [ ] Firewall configured (ports 22, 80, 443 only)
 - [ ] SSL certificates working
@@ -119,8 +118,8 @@ Before going live, ensure:
 # Test n8n login
 curl -u admin:password https://your-domain.com/login
 
-# Test Traefik dashboard
-curl -u admin:password https://traefik.your-domain.com
+# Test Caddy reverse proxy
+curl -I https://your-domain.com
 ```
 
 ### Test SSL
@@ -147,7 +146,7 @@ If you suspect a security breach:
 
 2. **Investigation**:
    - Check Docker logs: `docker compose logs`
-   - Review Traefik access logs
+   - Review Caddy access logs
    - Analyze n8n audit logs
 
 3. **Recovery**:
@@ -159,5 +158,5 @@ If you suspect a security breach:
 
 - [n8n Security Documentation](https://docs.n8n.io/hosting/security/)
 - [Docker Security Best Practices](https://docs.docker.com/engine/security/)
-- [Traefik Security Guide](https://doc.traefik.io/traefik/operations/security/)
+- [Caddy Security Guide](https://caddyserver.com/docs/automatic-https)
 - [PostgreSQL Security](https://www.postgresql.org/docs/current/security.html)
