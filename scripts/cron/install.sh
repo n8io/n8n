@@ -8,6 +8,7 @@ set -e  # Exit on any error
 
 # Auto-detect script directory and OS
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOMELAB_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 # Detect OS
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -21,9 +22,15 @@ else
     CRON_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 fi
 
+# File and Directory Paths
+DOCKER_COMPOSE_FILE="${HOMELAB_DIR}/docker-compose.yml"
+REFRESH_SCRIPT="${HOMELAB_DIR}/scripts/refresh.sh"
+TEST_ENV_SCRIPT="${HOMELAB_DIR}/scripts/cron/test-env.sh"
+LOG_DIR="${HOMELAB_DIR}/logs"
+
 # Configuration
 CRON_JOB_ID="docker-compose-refresh"
-CRON_COMMENT="# Docker Compose Refresh - Auto-managed by setup-cron.sh"
+CRON_COMMENT="# Docker Compose Refresh - Auto-managed by install.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -54,23 +61,23 @@ check_prerequisites() {
     print_status "🔍 Checking prerequisites..."
     
     # Check if we're in the right directory
-    if [ ! -f "docker-compose.yml" ]; then
-        print_error "📄 docker-compose.yml not found in $SCRIPT_DIR"
+    if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
+        print_error "📄 docker-compose.yml not found at $DOCKER_COMPOSE_FILE"
         print_error "💡 Please run this script from your homelab directory"
         exit 1
     fi
     
     # Check if refresh script exists
-    if [ ! -f "refresh.sh" ]; then
-        print_error "🔄 refresh.sh not found in $SCRIPT_DIR"
-        print_error "💡 Please ensure the refresh script is in the same directory"
+    if [ ! -f "$REFRESH_SCRIPT" ]; then
+        print_error "🔄 refresh.sh not found at $REFRESH_SCRIPT"
+        print_error "💡 Please ensure the refresh script is in the scripts directory"
         exit 1
     fi
     
     # Check if refresh script is executable
-    if [ ! -x "refresh.sh" ]; then
+    if [ ! -x "$REFRESH_SCRIPT" ]; then
         print_warning "🔧 Making refresh.sh executable..."
-        chmod +x refresh.sh
+        chmod +x "$REFRESH_SCRIPT"
     fi
     
     # Check if Docker is available
@@ -141,7 +148,7 @@ add_cron_job() {
         echo "$CRON_COMMENT"
         echo "# $CRON_JOB_ID: $description"
         echo "PATH=$CRON_PATH"
-        echo "$schedule cd $SCRIPT_DIR && $SCRIPT_DIR/refresh.sh"
+        echo "$schedule cd $HOMELAB_DIR && $REFRESH_SCRIPT"
     } > "$temp_crontab"
     
     # Install the new crontab
@@ -167,11 +174,11 @@ test_cron_environment() {
     print_status "🧪 Testing cron environment..."
     
     # Check if test script exists
-    if [ -f "scripts/universal/test-cron-env-universal.sh" ]; then
+    if [ -f "$TEST_ENV_SCRIPT" ]; then
         print_status "🔬 Running comprehensive cron environment test..."
-        ./scripts/universal/test-cron-env-universal.sh
+        "$TEST_ENV_SCRIPT"
     else
-        print_warning "⚠️  Test script not found, running basic test..."
+        print_warning "⚠️  Test script not found at $TEST_ENV_SCRIPT, running basic test..."
         
         # Basic test
         if env -i PATH="$CRON_PATH" HOME="$HOME" USER="$(whoami)" docker ps >/dev/null 2>&1; then
@@ -276,8 +283,8 @@ main() {
         show_current_cron_jobs
         echo ""
         print_success "🎊 Cron setup completed!"
-        print_status "💡 Monitor logs with: tail -f logs/refresh-\$(date +%Y%m%d).log"
-        print_status "💡 Test manually with: ./refresh.sh"
+        print_status "💡 Monitor logs with: tail -f $LOG_DIR/refresh-\$(date +%Y%m%d).log"
+        print_status "💡 Test manually with: $REFRESH_SCRIPT"
     fi
 }
 

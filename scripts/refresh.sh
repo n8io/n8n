@@ -1,16 +1,45 @@
 #!/bin/bash
 
-# Docker Compose Refresh Script - Cron Version
+# Docker Compose Refresh Script - OS-Aware Universal Version
 # This script gracefully shuts down containers, pulls latest images, and restarts services
-# Optimized for running from cron jobs
+# Automatically detects macOS vs Ubuntu/Linux and adapts accordingly
 
 set -e  # Exit on any error
 
-# Configuration
+# Auto-detect script directory and OS
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_DIR="${SCRIPT_DIR}/logs"
+HOMELAB_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Detect OS and set OS-specific configurations
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    OS="macOS"
+    DOCKER_SOCKET="/Users/$(whoami)/.docker/run/docker.sock"
+    CRON_PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    ENV_VARS=""
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS="Linux"
+    DOCKER_SOCKET="/var/run/docker.sock"
+    CRON_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ENV_VARS="COMPOSE_INTERACTIVE_NO_CLI=1 DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0"
+else
+    OS="Unknown"
+    DOCKER_SOCKET="/var/run/docker.sock"
+    CRON_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ENV_VARS="COMPOSE_INTERACTIVE_NO_CLI=1 DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0"
+fi
+
+# File and Directory Paths
+DOCKER_COMPOSE_FILE="${HOMELAB_DIR}/docker-compose.yml"
+ENV_FILE="${HOMELAB_DIR}/.env"
+ENV_EXAMPLE_FILE="${HOMELAB_DIR}/.env.example"
+LOG_DIR="${HOMELAB_DIR}/logs"
 LOG_FILE="${LOG_DIR}/refresh-$(date +%Y%m%d).log"
 LOCK_FILE="/tmp/docker-refresh.lock"
+SCRIPTS_DIR="${HOMELAB_DIR}/scripts"
+CRON_DIR="${SCRIPTS_DIR}/cron"
+DOCS_DIR="${HOMELAB_DIR}/docs"
+
+# Configuration
 MAX_LOG_DAYS=7
 
 # Ensure log directory exists
@@ -64,15 +93,25 @@ release_lock() {
 
 # Function to setup environment
 setup_environment() {
-    # Add common paths where Docker might be installed
-    export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+    log_info "🖥️  Setting up environment for $OS..."
     
-    # Change to script directory
-    cd "$SCRIPT_DIR"
+    # Set OS-specific PATH
+    export PATH="$CRON_PATH:$PATH"
+    
+    # Set OS-specific environment variables
+    if [ -n "$ENV_VARS" ]; then
+        for var in $ENV_VARS; do
+            export "$var"
+        done
+        log_info "🌍 Set environment variables: $ENV_VARS"
+    fi
+    
+    # Change to homelab directory
+    cd "$HOMELAB_DIR"
     
     # Verify we're in the right directory
-    if [ ! -f "docker-compose.yml" ]; then
-        log_error "📄 docker-compose.yml not found in $SCRIPT_DIR"
+    if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
+        log_error "📄 docker-compose.yml not found at $DOCKER_COMPOSE_FILE"
         exit 1
     fi
     
@@ -86,6 +125,38 @@ setup_environment() {
     if ! docker compose version >/dev/null 2>&1; then
         log_error "🐙 Docker Compose not available"
         exit 1
+    fi
+    
+    # Check Docker socket permissions (OS-specific)
+    if [ ! -S "$DOCKER_SOCKET" ]; then
+        log_error "🔌 Docker socket not found at $DOCKER_SOCKET"
+        exit 1
+    fi
+    
+    # Check if user can access Docker socket
+    if ! docker ps >/dev/null 2>&1; then
+        log_error "🚫 Cannot access Docker. User may need proper permissions"
+        if [[ "$OS" == "Linux" ]]; then
+            log_error "💡 Run: sudo usermod -aG docker \$USER && newgrp docker"
+        else
+            log_error "💡 Ensure Docker Desktop is running and accessible"
+        fi
+        exit 1
+    fi
+    
+    # OS-specific additional checks
+    if [[ "$OS" == "Linux" ]]; then
+        # Check if user is in docker group
+        if ! groups | grep -q docker; then
+            log_warning "⚠️  User not in 'docker' group. This may cause permission issues."
+            log_warning "💡 Run: sudo usermod -aG docker \$USER && newgrp docker"
+        fi
+        
+        # Check Docker daemon status
+        if command -v systemctl >/dev/null 2>&1 && ! systemctl is-active --quiet docker; then
+            log_warning "⚠️  Docker daemon is not running"
+            log_warning "💡 Run: sudo systemctl start docker"
+        fi
     fi
 }
 
@@ -161,9 +232,32 @@ verify_services() {
     docker compose ps >> "$LOG_FILE" 2>&1
 }
 
+# Function to check system resources
+check_system_resources() {
+    log_info "💻 Checking system resources..."
+    
+    # Check disk space
+    local disk_usage=$(df -h "$HOMELAB_DIR" | awk 'NR==2 {print $5}' | sed 's/%//')
+    if [ "$disk_usage" -gt 90 ]; then
+        log_warning "⚠️  Disk usage is high: ${disk_usage}%"
+    else
+        log_info "💾 Disk usage: ${disk_usage}%"
+    fi
+    
+    # Check memory (Linux only)
+    if [[ "$OS" == "Linux" ]] && command -v free >/dev/null 2>&1; then
+        local mem_usage=$(free | awk 'NR==2{printf "%.0f", $3*100/$2}')
+        if [ "$mem_usage" -gt 90 ]; then
+            log_warning "⚠️  Memory usage is high: ${mem_usage}%"
+        else
+            log_info "🧠 Memory usage: ${mem_usage}%"
+        fi
+    fi
+}
+
 # Main execution
 main() {
-    log_info "🔄 Starting Docker Compose refresh process..."
+    log_info "🔄 Starting Docker Compose refresh process on $OS..."
     
     # Setup trap to ensure lock is released on exit
     trap 'release_lock' EXIT INT TERM
@@ -176,6 +270,9 @@ main() {
     
     # Cleanup old logs
     cleanup_logs
+    
+    # Check system resources
+    check_system_resources
     
     # Step 1: Graceful shutdown
     if ! graceful_shutdown; then
@@ -198,10 +295,12 @@ main() {
     # Step 4: Verify services are healthy
     verify_services
     
-    log_success "🎊 Docker Compose refresh completed successfully!"
+    log_success "🎊 Docker Compose refresh completed successfully on $OS!"
     log_info "📋 Log file: $LOG_FILE"
     log_info "💡 Check service status with: docker compose ps"
     log_info "💡 Monitor logs with: docker compose logs -f"
+    log_info "💡 View logs with: tail -f $LOG_FILE"
+    log_info "💡 System info: $(uname -a)"
 }
 
 # Run main function

@@ -8,6 +8,7 @@ set -e  # Exit on any error
 
 # Auto-detect script directory and OS
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOMELAB_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 # Detect OS
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -21,9 +22,14 @@ else
     CRON_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 fi
 
+# File and Directory Paths
+DOCKER_COMPOSE_FILE="${HOMELAB_DIR}/docker-compose.yml"
+REFRESH_SCRIPT="${HOMELAB_DIR}/scripts/refresh.sh"
+LOG_DIR="${HOMELAB_DIR}/logs"
+
 # Configuration
 CRON_JOB_ID="docker-compose-refresh"
-CRON_COMMENT="# Docker Compose Refresh - Auto-managed by setup-cron.sh"
+CRON_COMMENT="# Docker Compose Refresh - Auto-managed by install.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -172,7 +178,7 @@ check_cron_path() {
 
 # Function to check last execution (if logs exist)
 check_last_execution() {
-    local log_dir="$SCRIPT_DIR/logs"
+    local log_dir="$LOG_DIR"
     
     if [ -d "$log_dir" ]; then
         local latest_log=$(find "$log_dir" -name "refresh-*.log" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
@@ -335,8 +341,8 @@ main() {
     esac
     
     echo ""
-    print_status "💡 Use './setup-cron.sh' to install or modify cron jobs"
-    print_status "💡 Use './refresh.sh' to run refresh manually"
+    print_status "💡 Use '$HOMELAB_DIR/scripts/cron/install.sh' to install or modify cron jobs"
+    print_status "💡 Use '$REFRESH_SCRIPT' to run refresh manually"
 }
 
 # Run main function

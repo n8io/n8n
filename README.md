@@ -7,65 +7,61 @@ A complete solution for managing Docker Compose services with automated refresh 
 ### 1. Refresh Services (OS-Aware)
 ```bash
 # Automatically detects your OS and refreshes services
-./refresh.sh
+./scripts/refresh.sh
 ```
 
 ### 2. Setup Cron Job (OS-Aware)
 ```bash
 # Set up daily refresh at 2 AM
-./setup-cron.sh daily
+./scripts/cron/install.sh daily
 
 # Set up weekly refresh on Sunday at 3 AM
-./setup-cron.sh weekly
+./scripts/cron/install.sh weekly
 
 # Set up monthly refresh on 1st at 4 AM
-./setup-cron.sh monthly
+./scripts/cron/install.sh monthly
 
 # Custom schedule (every 6 hours)
-./setup-cron.sh custom "0 */6 * * *"
+./scripts/cron/install.sh custom "0 */6 * * *"
 
 # Remove cron job
-./setup-cron.sh remove
+./scripts/cron/install.sh remove
 
 # Check status
-./setup-cron.sh status
+./scripts/cron/install.sh status
 ```
 
 ### 3. Check Cron Job Status (OS-Aware)
 ```bash
 # Quick status check
-./check-cron.sh
+./scripts/cron/check.sh
 
 # Detailed analysis
-./check-cron.sh detailed
+./scripts/cron/check.sh detailed
 
 # Show help
-./check-cron.sh help
+./scripts/cron/check.sh help
 ```
 
 ## 📁 Project Structure
 
 ```
 homelab/
-├── refresh.sh                    # 🎯 Main OS-aware refresh script
-├── setup-cron.sh                 # 🎯 Main OS-aware cron setup script
-├── check-cron.sh                 # 🔍 Main OS-aware cron check script
 ├── docker-compose.yml            # Docker Compose configuration
 ├── .env.example                  # Environment variables template
-├── scripts/                      # Platform-specific scripts
-│   ├── universal/                # Cross-platform scripts
-│   │   └── test-cron-env-universal.sh
-│   ├── macos/                    # macOS-specific scripts
-│   │   ├── refresh-cron.sh
-│   │   └── test-cron-env.sh
-│   └── ubuntu/                   # Ubuntu-specific scripts
-│       ├── refresh-ubuntu.sh
-│       └── test-cron-env-ubuntu.sh
+├── scripts/                      # All scripts organized by type
+│   ├── refresh.sh                # 🎯 Main OS-aware refresh script
+│   ├── generate-secrets.sh       # 🔐 Cross-platform security script
+│   └── cron/                     # Cron job management scripts
+│       ├── install.sh            # 🎯 Install/setup cron jobs
+│       ├── check.sh              # 🔍 Check cron job status
+│       └── test-env.sh           # 🧪 Test cron environment
 ├── docs/                         # Documentation
 │   ├── ubuntu-setup-guide.md
 │   └── crontab-example.txt
 └── logs/                         # Log files (auto-created)
-    └── refresh-YYYYMMDD.log
+    ├── refresh-YYYYMMDD.log
+    └── cron-test-YYYYMMDD-HHMMSS.log
 ```
 
 ## 🎯 Main Scripts
@@ -78,19 +74,34 @@ homelab/
 - ✅ **Locking**: Prevents concurrent runs
 - ✅ **Resource Monitoring**: Disk space and memory checks
 
-### `setup-cron.sh` - Universal Cron Setup Script
+### `cron/install.sh` - Universal Cron Setup Script
 - ✅ **OS-Aware**: Adapts to macOS and Ubuntu environments
 - ✅ **Idempotent**: Safe to run multiple times, removes old jobs
 - ✅ **Flexible**: Daily, weekly, monthly, or custom schedules
 - ✅ **Prerequisites Check**: Validates Docker access and permissions
 - ✅ **Environment Testing**: Tests cron environment compatibility
 
-### `check-cron.sh` - Universal Cron Check Script
+### `cron/check.sh` - Universal Cron Check Script
 - ✅ **OS-Aware**: Automatically detects macOS vs Ubuntu/Linux
 - ✅ **Comprehensive**: Quick status and detailed analysis modes
 - ✅ **Validation**: Checks cron format, script paths, permissions
 - ✅ **Monitoring**: Shows last execution time and cron service status
 - ✅ **Troubleshooting**: Identifies common issues and provides solutions
+
+### `cron/test-env.sh` - Cron Environment Test Script
+- ✅ **OS-Aware**: Automatically detects macOS vs Ubuntu/Linux
+- ✅ **Comprehensive Testing**: Validates Docker access, permissions, and environment
+- ✅ **Detailed Logging**: Creates timestamped logs for troubleshooting
+- ✅ **Cron Simulation**: Tests minimal cron environment compatibility
+- ✅ **System Validation**: Checks disk space, memory, and system requirements
+
+### `generate-secrets.sh` - Cross-Platform Security Script
+- ✅ **Cross-Platform**: Works on macOS, Ubuntu/Debian, and CentOS/RHEL
+- ✅ **Idempotent**: Safe to run multiple times without side effects
+- ✅ **Dependency Checking**: Validates required tools and provides install instructions
+- ✅ **Secure Generation**: Creates strong encryption keys and passwords
+- ✅ **Backup Protection**: Creates timestamped backups before regeneration
+- ✅ **Platform-Specific**: Provides OS-specific installation instructions
 
 ## 🖥️ OS Support
 
@@ -99,6 +110,7 @@ homelab/
 - ✅ User socket permissions (`/Users/username/.docker/run/docker.sock`)
 - ✅ No special group requirements
 - ✅ Homebrew PATH support
+- ✅ Cross-platform script support
 
 ### Ubuntu/Linux (Docker Engine)
 - ✅ System Docker daemon support
@@ -106,6 +118,14 @@ homelab/
 - ✅ System socket permissions (`/var/run/docker.sock`)
 - ✅ Systemctl daemon status checks
 - ✅ Environment variables for headless operation
+- ✅ Cross-platform script support
+
+### Universal Script Features
+- ✅ **OS-Aware**: All scripts automatically detect macOS vs Ubuntu/Linux
+- ✅ **No Platform-Specific Scripts**: Single scripts work on both platforms
+- ✅ **Automatic Configuration**: Platform-specific settings applied automatically
+- ✅ **Dependency Checking**: Validates required tools with platform-specific instructions
+- ✅ **Fallback Support**: Works even without optional dependencies
 
 ## 🔧 Features
 
@@ -130,37 +150,37 @@ homelab/
 ### Basic Usage
 ```bash
 # Refresh services now
-./refresh.sh
+./scripts/refresh.sh
 
 # Set up daily refresh at 2 AM
-./setup-cron.sh daily
+./scripts/cron/install.sh daily
 
 # Check if cron job is installed
-./check-cron.sh
+./scripts/cron/check.sh
 
 # Check what's scheduled
-./setup-cron.sh status
+./scripts/cron/install.sh status
 ```
 
 ### Advanced Usage
 ```bash
 # Custom schedule (every 6 hours)
-./setup-cron.sh custom "0 */6 * * *"
+./scripts/cron/install.sh custom "0 */6 * * *"
 
 # Weekly on Monday at 3 AM
-./setup-cron.sh weekly 1
+./scripts/cron/install.sh weekly 1
 
 # Monthly on 15th at 4 AM
-./setup-cron.sh monthly 15
+./scripts/cron/install.sh monthly 15
 
 # Test cron environment
-./setup-cron.sh test
+./scripts/cron/install.sh test
 
 # Remove cron job
-./setup-cron.sh remove
+./scripts/cron/install.sh remove
 
 # Detailed cron job analysis
-./check-cron.sh detailed
+./scripts/cron/check.sh detailed
 ```
 
 ### Monitoring
@@ -190,7 +210,7 @@ docker ps
 ### Cron Issues
 ```bash
 # Test cron environment
-./setup-cron.sh test
+./scripts/cron/install.sh test
 
 # Check cron logs
 sudo journalctl -u cron  # Ubuntu

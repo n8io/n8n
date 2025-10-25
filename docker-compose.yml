@@ -3,6 +3,7 @@ services:
     container_name: n8n_postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_USER: ${POSTGRES_USER}
     healthcheck:
@@ -15,13 +16,25 @@ services:
     networks:
       - n8n_network
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
 
   traefik:
     command:
+      - "--accesslog=true"
       - "--api.dashboard=true"
-      - "--api.insecure=true"
+      - "--api.insecure=false"
       - "--certificatesresolvers.letsencrypt.acme.email=${CERT_EMAIL}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
@@ -29,6 +42,7 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--global.checkNewVersion=false"
       - "--global.sendAnonymousUsage=false"
+      - "--log.level=INFO"
       - "--ping=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker=true"
@@ -42,12 +56,14 @@ services:
     image: traefik:v3
     labels:
       - "traefik.enable=true"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_AUTH_USERS}"
+      - "traefik.http.routers.traefik-health.priority=1"
+      - "traefik.http.routers.traefik-health.rule=Host(`traefik.${DOMAIN}`) && PathPrefix(`/ping`)"
+      - "traefik.http.routers.traefik-health.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=traefik-auth"
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
       - "traefik.http.routers.traefik.service=api@internal"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.traefik-health.rule=Host(`traefik.${DOMAIN}`) && PathPrefix(`/ping`)"
-      - "traefik.http.routers.traefik-health.service=api@internal"
-      - "traefik.http.routers.traefik-health.priority=1"
     networks:
       - n8n_network
     ports:
@@ -82,6 +98,16 @@ services:
       N8N_RUNNERS_ENABLED: "true"
       TZ: ${N8N_TIMEZONE:-UTC}
       WEBHOOK_URL: "https://${DOMAIN}"
+      # Security Settings
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_SECURE_COOKIE: "true"
+      N8N_SKIP_WEBHOOK_DEREGISTRATION_SHUTDOWN: "true"
+      N8N_DISABLE_UI: "false"
+      N8N_DISABLE_PRODUCTION_MAIN_PROCESS: "false"
+      N8N_LOG_LEVEL: "info"
+      N8N_LOG_OUTPUT: "console"
     healthcheck:
       interval: 5s
       retries: 6
@@ -98,14 +124,32 @@ services:
       - "traefik.http.routers.n8n.entrypoints=websecure"
       - "traefik.http.routers.n8n.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.n8n.tls=true"
+      - "traefik.http.routers.n8n.middlewares=n8n-security"
+      - "traefik.http.middlewares.n8n-security.headers.frameDeny=true"
+      - "traefik.http.middlewares.n8n-security.headers.sslRedirect=true"
+      - "traefik.http.middlewares.n8n-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.n8n-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.n8n-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.n8n-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.n8n-security.headers.stsPreload=true"
+      - "traefik.http.middlewares.n8n-security.headers.stsSeconds=31536000"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
     networks:
       - n8n_network
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    user: "1000:1000"
     volumes:
       - n8n_data:/home/node/.n8n
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
 
 volumes:
   n8n_data:

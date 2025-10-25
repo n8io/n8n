@@ -5,8 +5,15 @@
 
 # Auto-detect script directory and create log path
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="${SCRIPT_DIR}/logs/cron-test-$(date +%Y%m%d-%H%M%S).log"
-mkdir -p "$(dirname "$LOG_FILE")"
+HOMELAB_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
+# File and Directory Paths
+DOCKER_COMPOSE_FILE="${HOMELAB_DIR}/docker-compose.yml"
+LOG_DIR="${HOMELAB_DIR}/logs"
+LOG_FILE="${LOG_DIR}/cron-test-$(date +%Y%m%d-%H%M%S).log"
+
+# Ensure log directory exists
+mkdir -p "$LOG_DIR"
 
 # Detect OS
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -83,10 +90,10 @@ fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] 📁 Working directory: $(pwd)" | tee -a "$LOG_FILE"
 
 # Test 9: Check if docker-compose.yml exists
-if [ -f "docker-compose.yml" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ docker-compose.yml found" | tee -a "$LOG_FILE"
+if [ -f "$DOCKER_COMPOSE_FILE" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ docker-compose.yml found at $DOCKER_COMPOSE_FILE" | tee -a "$LOG_FILE"
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ docker-compose.yml NOT found" | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ docker-compose.yml NOT found at $DOCKER_COMPOSE_FILE" | tee -a "$LOG_FILE"
 fi
 
 # Test 10: Check system information
@@ -134,14 +141,13 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🎊 Test completed. Check log: $LOG_FILE" 
 # Summary
 echo "" | tee -a "$LOG_FILE"
 echo "=== SUMMARY ===" | tee -a "$LOG_FILE"
-if docker ps >/dev/null 2>&1 && [ -f "docker-compose.yml" ]; then
+if docker ps >/dev/null 2>&1 && [ -f "$DOCKER_COMPOSE_FILE" ]; then
     echo "✅ READY FOR CRON: All tests passed!" | tee -a "$LOG_FILE"
     echo "💡 You can now safely add this to your crontab" | tee -a "$LOG_FILE"
     echo "📋 Recommended cron command:" | tee -a "$LOG_FILE"
-    echo "   0 2 * * * cd $SCRIPT_DIR && $SCRIPT_DIR/refresh-cron.sh" | tee -a "$LOG_FILE"
+    echo "   0 2 * * * cd $HOMELAB_DIR && $HOMELAB_DIR/scripts/refresh.sh" | tee -a "$LOG_FILE"
     if [[ "$OS" == "Linux" ]]; then
-        echo "   # Or for Ubuntu:" | tee -a "$LOG_FILE"
-        echo "   0 2 * * * cd $SCRIPT_DIR && $SCRIPT_DIR/refresh-ubuntu.sh" | tee -a "$LOG_FILE"
+        echo "   # Same command works on Ubuntu/Linux too!" | tee -a "$LOG_FILE"
     fi
 else
     echo "❌ NOT READY: Some tests failed" | tee -a "$LOG_FILE"
