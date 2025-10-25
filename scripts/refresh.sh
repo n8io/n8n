@@ -214,15 +214,27 @@ verify_services() {
     
     local max_attempts=30
     local attempt=1
+    local services_to_check=("n8n" "postgres")
     
     while [ $attempt -le $max_attempts ]; do
-        local unhealthy_services=$(docker compose ps --format "table {{.Service}}\t{{.Status}}" | grep -v "healthy" | grep -v "SERVICE" | wc -l)
+        local all_healthy=true
+        local unhealthy_services=()
         
-        if [ "$unhealthy_services" -eq 0 ]; then
-            log_success "🎊 All services are healthy!"
+        for service in "${services_to_check[@]}"; do
+            local service_status=$(docker compose ps --format "{{.Service}} {{.Status}}" | grep "^$service " | cut -d' ' -f2-)
+            
+            if [[ "$service_status" != *"healthy"* ]]; then
+                all_healthy=false
+                unhealthy_services+=("$service ($service_status)")
+            fi
+        done
+        
+        if [ "$all_healthy" = true ]; then
+            log_success "🎊 All required services (n8n, postgres) are healthy!"
             return 0
         fi
         
+        log_info "⏳ Services not healthy yet: ${unhealthy_services[*]}"
         log_info "⏳ Waiting for services to become healthy (attempt $attempt/$max_attempts)..."
         sleep 10
         ((attempt++))
